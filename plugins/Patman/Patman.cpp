@@ -141,6 +141,11 @@ void PatmanInstrument::playNote( NotePlayHandle * _n,
 		return;
 	}
 
+	if( m_patchSamples.empty() )
+	{
+		return;
+	}
+
 	const fpp_t frames = _n->framesLeftForCurrentPeriod();
 	const f_cnt_t offset = _n->noteOffset();
 
@@ -185,23 +190,24 @@ void PatmanInstrument::setFile( const QString & _patch_file, bool _rename )
 		return;
 	}
 
+	const bool shouldRename = _rename &&
+		( instrumentTrack()->name() == QFileInfo( m_patchFile ).fileName() ||
+		  m_patchFile == "" );
+
 	// is current instrument-track-name equal to previous-filename??
-	if( _rename &&
-		( instrumentTrack()->name() ==
-					QFileInfo( m_patchFile ).fileName() ||
-				   	m_patchFile == "" ) )
-	{
-		// then set it to new one
-		instrumentTrack()->setName( PathUtil::cleanName( _patch_file ) );
-	}
-	// else we don't touch the instrument-track-name, because the user
-	// named it self
+	// only rename after a successful load, otherwise the track name would
+	// point to a patch that is not actually available
 
 	m_patchFile = PathUtil::toShortestRelative( _patch_file );
 	LoadError error = loadPatch( PathUtil::toAbsolute( _patch_file ) );
 	if( error != LoadError::OK )
 	{
+		m_patchFile = QString();
 		printf("Load error\n");
+	}
+	else if( shouldRename )
+	{
+		instrumentTrack()->setName( PathUtil::cleanName( _patch_file ) );
 	}
 
 	emit fileChanged();
@@ -542,6 +548,13 @@ void PatmanView::openFile()
 
 void PatmanView::updateFilename()
 {
+	if( m_pi->m_patchFile.isEmpty() )
+	{
+		m_displayFilename = tr("No file selected");
+		update();
+		return;
+	}
+
  	m_displayFilename = "";
 	int idx = m_pi->m_patchFile.length();
 
